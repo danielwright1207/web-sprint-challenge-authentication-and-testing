@@ -1,7 +1,37 @@
-const router = require('express').Router();
+const router = require("express").Router();
+const jwt = require("jsonwebtoken");
+const { JWT_SECRET } = require("../../secret/secret");
+const bcrypt = require("bcryptjs");
+const Users = require("./user-model");
+const {
+  checkUsernameFree,
+  checkUsernameExists,
+} = require("../middleware/auth-middleware");
 
-router.post('/register', (req, res) => {
-  res.end('implement register, please!');
+router.post("/register", checkUsernameFree, (req, res, next) => {
+  const credentials = req.body;
+
+  if (credentials) {
+    const rounds = process.env.BCRYPT_ROUNDS || 8;
+
+    const hash = bcrypt.hashSync(credentials.password, rounds);
+
+    credentials.password = hash;
+
+    Users.add(credentials)
+      .then((user) => {
+        res.status(201).json(user);
+      })
+      .catch((err) => {
+        res.status(500).json("username and password required");
+      });
+  } else {
+    res.status(400).json({
+      message:
+        "please provide username and password, password must be alphanumeric",
+    });
+  }
+
   /*
     IMPLEMENT
     You are welcome to build additional middlewares to help with the endpoint's functionality.
@@ -29,8 +59,30 @@ router.post('/register', (req, res) => {
   */
 });
 
-router.post('/login', (req, res) => {
-  res.end('implement login, please!');
+router.post("/login", checkUsernameExists, (req, res) => {
+  if (req.body) {
+    const { username, password } = req.body;
+
+    Users.findBy({ username: username })
+      .then(([user]) => {
+        if (user && bcrypt.compareSync(password, user.password)) {
+          const token = buildToken(user);
+          res
+            .status(200)
+            .json({ message: `welcome, ${user.username}`, token: token });
+        } else {
+          res.status(401).json({ message: "username and password required" });
+        }
+      })
+      .catch((err) => {
+        res.status(500).json({ message: err.message, stack: err.stack });
+      });
+  } else {
+    res.status(400).json({
+      message:
+        "please provide username and password, password must be alphanumeric",
+    });
+  }
   /*
     IMPLEMENT
     You are welcome to build additional middlewares to help with the endpoint's functionality.
@@ -55,5 +107,16 @@ router.post('/login', (req, res) => {
       the response body should include a string exactly as follows: "invalid credentials".
   */
 });
+
+function buildToken(user) {
+  const payload = {
+    subject: user.id,
+    username: user.username,
+  };
+  const configuration = {
+    expiresIn: "1d",
+  };
+  return jwt.sign(payload, JWT_SECRET, configuration);
+}
 
 module.exports = router;
