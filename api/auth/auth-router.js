@@ -15,7 +15,7 @@ router.post("/register", checkUsernameFree, (req, res, next) => {
     const rounds = process.env.BCRYPT_ROUNDS || 8;
 
     const hash = bcrypt.hashSync(credentials.password, rounds);
-
+    /// here
     credentials.password = hash;
 
     Users.add(credentials)
